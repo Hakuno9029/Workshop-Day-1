@@ -1,0 +1,72 @@
+<main>
+  <header>
+    <p class="eyebrow">Small links. Simple sharing.</p>
+    <h1>Snip</h1>
+    <p>Turn a long URL into a short link.</p>
+  </header>
+
+  <section class="card" aria-labelledby="create-heading">
+    <h2 id="create-heading">Shorten a link</h2>
+    <form [formGroup]="form" (ngSubmit)="submit()" [attr.aria-busy]="pending()">
+      <label for="url">Original URL</label>
+      <div class="input-row">
+        <input id="url" type="url" formControlName="url" placeholder="https://example.com/a-long-link"
+          autocomplete="url" inputmode="url" spellcheck="false" required [readOnly]="pending()"
+          [attr.aria-invalid]="urlError ? 'true' : null"
+          [attr.aria-describedby]="urlError ? 'url-hint url-error' : 'url-hint'">
+        <button type="submit" [disabled]="pending()">{{ pending() ? 'Shortening...' : 'Shorten URL' }}</button>
+      </div>
+      <p id="url-hint" class="muted hint">Use a complete http:// or https:// address.</p>
+      <div aria-live="polite" aria-atomic="true">
+        @if (urlError) {
+          <p id="url-error" class="error">{{ urlError }}</p>
+        }
+      </div>
+    </form>
+    <div role="status" aria-atomic="true">
+      @if (createdLink(); as link) {
+        <p class="success">Your short link: <a [href]="link.shortUrl" target="_blank" rel="noopener noreferrer">{{ link.shortUrl }}</a>
+          <span class="muted"> (opens in a new tab)</span>
+        </p>
+      }
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="links-heading">
+    <div class="section-heading">
+      <h2 id="links-heading">Your links</h2>
+      <button class="secondary" type="button" (click)="loadLinks()" [disabled]="loading()">Refresh links</button>
+    </div>
+    <p class="muted hint">Refresh to see new hits. Links are cleared when the server restarts.</p>
+    <div role="status" aria-atomic="true">
+      @if (loading()) {
+        <p>Loading links...</p>
+      } @else if (!listError() && links().length === 0) {
+        <p>No links yet. Shorten your first URL above.</p>
+      }
+    </div>
+    @if (listError()) {
+      <p class="error" role="alert">{{ listError() }}</p>
+    }
+    @if (links().length > 0) {
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Links table" [attr.aria-busy]="loading()">
+        <table>
+          <caption class="sr-only">Short links, original URLs and hit counts. Links open in a new tab.</caption>
+          <thead>
+            <tr><th scope="col">Short link</th><th scope="col">Original URL</th><th scope="col" class="hits">Hits</th></tr>
+          </thead>
+          <tbody>
+            @for (link of links(); track link.code) {
+              <tr>
+                <td><a [href]="link.shortUrl" target="_blank" rel="noopener noreferrer"
+                  [attr.aria-label]="'Open short link ' + link.code + ' in a new tab'">{{ link.code }}</a></td>
+                <td class="original"><a [href]="link.url" target="_blank" rel="noopener noreferrer">{{ link.url }}</a></td>
+                <td class="hits">{{ link.hits }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</main>
