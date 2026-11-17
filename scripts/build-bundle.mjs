@@ -38,8 +38,22 @@ function writeBundleFile(name, content) {
   writeFileSync(join(bundleDir, name), content, 'utf8');
 }
 
+function assertCleanIndex(cwd, label) {
+  const result = git(['diff', '--cached', '--quiet'], cwd, { allowFailure: true });
+  if (result.status === 1) throw new Error(`${label} has staged changes; commit them before rebuilding.`);
+  if (result.status !== 0) throw new Error(`Could not inspect the ${label} index.`);
+}
+
+function assertCleanWorktree(cwd, label) {
+  const result = git(['status', '--porcelain', '--untracked-files=all'], cwd, { silent: true });
+  if (result.status !== 0) throw new Error(`Could not inspect the ${label} worktree.`);
+  if (result.stdout.trim()) throw new Error(`${label} has uncommitted changes; commit them before rebuilding.`);
+}
+
 try {
+  assertCleanIndex(root, 'superproject');
   run('git', ['submodule', 'update', '--init', '--remote', 'backend', 'frontend', 'cli']);
+  assertCleanWorktree(bundleDir, 'bundle submodule');
   run('npm', ['ci'], join(root, 'frontend'));
   run('npm', ['run', 'build'], join(root, 'frontend'));
 
@@ -92,24 +106,33 @@ try {
 
   run('git', ['add', '-A'], bundleDir);
   const staged = git(['diff', '--cached', '--quiet'], bundleDir, { allowFailure: true });
+  let bundleChanged = false;
   if (staged.status === 1) {
     run('git', ['commit', '-m', 'Build Snip release bundle'], bundleDir);
-    git(['add', 'bundle']);
-    const pointerDiff = git(['diff', '--cached', '--quiet'], root, { allowFailure: true });
-    if (pointerDiff.status === 1) {
-      run('git', ['commit', '-m', 'Update generated bundle'], root);
-      if (push) {
-        run('git', ['push', 'origin', 'HEAD:bundle'], bundleDir);
-        run('git', ['push', 'origin', 'main'], root);
-      }
-    } else if (pointerDiff.status !== 0) {
-      throw new Error(`Could not inspect staged bundle pointer (git diff exited ${pointerDiff.status}).`);
-    }
-    console.log('Bundle updated.');
-  } else if (staged.status === 0) {
-    console.log('Bundle unchanged.');
-  } else {
+    bundleChanged = true;
+  } else if (staged.status !== 0) {
     throw new Error(`Could not inspect staged bundle changes (git diff exited ${staged.status}).`);
+  }
+
+  git(['add', 'backend', 'frontend', 'cli', 'bundle']);
+  const pointerDiff = git(['diff', '--cached', '--quiet'], root, { allowFailure: true });
+  let mainChanged = false;
+  if (pointerDiff.status === 1) {
+    run('git', ['commit', '-m', 'Update component and bundle pointers'], root);
+    mainChanged = true;
+  } else if (pointerDiff.status !== 0) {
+    throw new Error(`Could not inspect staged submodule pointers (git diff exited ${pointerDiff.status}).`);
+  }
+
+  if (push) {
+    if (bundleChanged) run('git', ['push', 'origin', 'HEAD:bundle'], bundleDir);
+    if (mainChanged) run('git', ['push', 'origin', 'main'], root);
+  }
+
+  if (bundleChanged || mainChanged) {
+    console.log(`Bundle ${bundleChanged ? 'updated' : 'unchanged'}; superproject ${mainChanged ? 'updated' : 'unchanged'}.`);
+  } else {
+    console.log('Bundle unchanged; submodule pointers unchanged.');
   }
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
