@@ -10,3 +10,7 @@
 	path = cli
 	url = https://github.com/Hakuno9029/Workshop-Day-1.git
 	branch = cli
+[submodule "bundle"]
+	path = bundle
+	url = C:\\Users\\70021527\\AppData\\Local\\Temp\\snip-bundle-seed-7b2244f6
+	branch = bundle
