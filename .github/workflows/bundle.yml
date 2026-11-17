@@ -1,0 +1,43 @@
+name: Build bundle
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main and its submodules
+        # No push trigger: this workflow only exists on main, so pushes to component branches cannot start it.
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          submodules: true
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Set bot identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Rebuild and publish bundle
+        id: build
+        run: |
+          before="$(git rev-parse HEAD)"
+          node scripts/build-bundle.mjs --push
+          after="$(git rev-parse HEAD)"
+          if [ "$before" != "$after" ]; then
+            echo "release_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Start Docker image build
+        if: steps.build.outputs.release_changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docker.yml --ref main
